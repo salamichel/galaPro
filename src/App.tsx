@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, Component, ReactNode } from 'react';
 import { 
   Users, Ticket, Settings, CheckCircle2, AlertCircle, Info,
-  Upload, Lock, Unlock, ArrowRight, Mail, Loader2, Trash2 
+  Upload, Lock, Unlock, ArrowRight, Mail, Loader2, Trash2,
+  Search, RefreshCw, XCircle, CheckCircle, ExternalLink
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, getDoc, updateDoc, 
@@ -191,6 +192,25 @@ export default function App() {
     }
   }, []);
 
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    if (!confirm(`Changer le statut en "${newStatus}" ?`)) return;
+    try {
+      await updateDoc(doc(db, 'reservations', id), { status: newStatus });
+      showToast(`Statut mis à jour : ${newStatus}`);
+    } catch (err) {
+      showToast("Erreur lors de la mise à jour", "error");
+    }
+  };
+
+  const handleDeleteReservation = async (id: string) => {
+    if (!confirm("Supprimer cette réservation ?")) return;
+    try {
+      await deleteDoc(doc(db, 'reservations', id));
+      showToast("Réservation supprimée");
+    } catch (err) {
+      showToast("Erreur lors de la suppression", "error");
+    }
+  };
   const handleManualCheckStatus = async (res: Reservation) => {
     if (!res.helloAssoId) {
       showToast("ID HelloAsso manquant pour cette réservation", "error");
@@ -556,12 +576,19 @@ export default function App() {
     const [importText, setImportText] = useState('');
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
     const [editSettings, setEditSettings] = useState<AppSettings>(settings);
+    const [resSearch, setResSearch] = useState('');
 
     useEffect(() => {
       setEditSettings(settings);
     }, [settings]);
 
     if (!isAdmin) return <div className="p-8 text-center">Accès refusé</div>;
+
+    const filteredReservations = reservations.filter(r => 
+      r.buyerName.toLowerCase().includes(resSearch.toLowerCase()) ||
+      r.buyerEmail.toLowerCase().includes(resSearch.toLowerCase()) ||
+      String(r.helloAssoId).includes(resSearch)
+    );
 
     const handleSaveSettings = async () => {
       try {
@@ -792,27 +819,104 @@ export default function App() {
           </div>
 
           <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
-            <h3 className="font-bold mb-4">Dernières Réservations</h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-              {reservations.map(res => (
-                <div key={res.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-sm">{res.buyerName}</p>
-                    <p className="text-[10px] text-slate-400">ID: {res.helloAssoId} • {res.adultCount} Ad • {res.childCount} Enf • {res.pmrCount} PMR</p>
-                  </div>
-                  <span 
-                    onClick={() => res.status === 'pending' && handleManualCheckStatus(res)}
-                    className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase cursor-pointer transition-all ${
-                      res.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 
-                      res.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
-                      'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                    }`}
-                    title={res.status === 'pending' ? "Cliquer pour vérifier le statut" : ""}
-                  >
-                    {res.status}
-                  </span>
-                </div>
-              ))}
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+              <h3 className="font-bold flex items-center"><Ticket className="mr-2 w-5 h-5" /> Dernières Réservations</h3>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Rechercher..." 
+                  value={resSearch}
+                  onChange={e => setResSearch(e.target.value)}
+                  className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-full md:w-64"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+              {filteredReservations.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 italic">Aucune réservation trouvée</div>
+              ) : (
+                filteredReservations.map(res => {
+                  const totalAmount = (res.adultCount * settings.priceAdult) + (res.childCount * settings.priceChild) + (res.pmrCount * settings.pricePmr);
+                  const dateStr = res.createdAt?.seconds ? new Date(res.createdAt.seconds * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...';
+                  
+                  return (
+                    <div key={res.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-slate-900">{res.buyerName}</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                              res.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 
+                              res.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {res.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                            <span className="flex items-center"><Mail className="w-3 h-3 mr-1" /> {res.buyerEmail}</span>
+                            <span className="flex items-center font-mono">ID: {res.helloAssoId}</span>
+                            <span className="font-medium text-slate-400">{dateStr}</span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-3">
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                              <span className="text-indigo-600">{res.adultCount}</span> Ad
+                            </div>
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                              <span className="text-indigo-600">{res.childCount}</span> Enf
+                            </div>
+                            <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                              <span className="text-indigo-600">{res.pmrCount}</span> PMR
+                            </div>
+                            <div className="ml-auto font-black text-indigo-600 text-sm">
+                              {totalAmount}€
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                          {res.status === 'pending' && (
+                            <button 
+                              onClick={() => handleManualCheckStatus(res)}
+                              className="p-2 bg-white border border-slate-200 rounded-xl text-amber-600 hover:bg-amber-50 transition-colors"
+                              title="Vérifier HelloAsso"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </button>
+                          )}
+                          {res.status !== 'completed' && (
+                            <button 
+                              onClick={() => handleUpdateStatus(res.id, 'completed')}
+                              className="p-2 bg-white border border-slate-200 rounded-xl text-emerald-600 hover:bg-emerald-50 transition-colors"
+                              title="Forcer Validation"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          {res.status !== 'cancelled' && (
+                            <button 
+                              onClick={() => handleUpdateStatus(res.id, 'cancelled')}
+                              className="p-2 bg-white border border-slate-200 rounded-xl text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Annuler"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => handleDeleteReservation(res.id)}
+                            className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-rose-600 transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
