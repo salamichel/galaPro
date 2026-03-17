@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - HELLOASSO_CLIENT_ID=${HELLOASSO_CLIENT_ID}
+      - HELLOASSO_CLIENT_SECRET=${HELLOASSO_CLIENT_SECRET}
+      - HELLOASSO_ORGANIZATION_SLUG=${HELLOASSO_ORGANIZATION_SLUG}
+      - APP_URL=${APP_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}

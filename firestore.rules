@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+         request.auth.token.email == "stephane.alamichel@gmail.com");
+    }
+
+    // Settings: Publicly readable, only admin can write
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Members: Admin can do everything, users can read if they know the ID (for validation)
+    match /members/{memberId} {
+      allow read: if true; // Needed for validation in phase 1
+      allow write: if isAdmin();
+    }
+
+    // Reservations: Anyone can create, only admin can read/update/delete
+    match /reservations/{resId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // Users: Private profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "members": {
+      "title": "Member",
+      "description": "A dancer or member eligible for Phase 1 booking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique dancer code" },
+        "name": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "format": "email" },
+        "ticketsBought": { "type": "integer", "description": "Number of tickets already purchased" }
+      },
+      "required": ["id", "name", "ticketsBought"]
+    },
+    "reservations": {
+      "title": "Reservation",
+      "description": "A completed ticket reservation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "buyerName": { "type": "string" },
+        "buyerEmail": { "type": "string", "format": "email" },
+        "dancerCode": { "type": "string" },
+        "stdCount": { "type": "integer" },
+        "pmrCount": { "type": "integer" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "helloAssoOrderId": { "type": "string" }
+      },
+      "required": ["buyerName", "buyerEmail", "stdCount", "pmrCount", "status", "createdAt"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "phase": { "type": "integer", "enum": [1, 2] },
+        "capacityStd": { "type": "integer" },
+        "capacityPmr": { "type": "integer" },
+        "guestsCount": { "type": "integer" },
+        "maxPerDancerPhase1": { "type": "integer" },
+        "priceStd": { "type": "number" },
+        "pricePmr": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "members": {
+      "schema": "members",
+      "description": "List of members for phase 1 validation"
+    },
+    "reservations": {
+      "schema": "reservations",
+      "description": "All ticket reservations"
+    },
+    "settings": {
+      "schema": "settings",
+      "description": "Global configuration"
+    }
+  }
+}
