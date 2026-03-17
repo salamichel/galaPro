@@ -6,11 +6,12 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Unique dancer code" },
-        "name": { "type": "string", "description": "Full name" },
+        "firstName": { "type": "string", "description": "First name" },
+        "lastName": { "type": "string", "description": "Last name" },
         "email": { "type": "string", "format": "email" },
         "ticketsBought": { "type": "integer", "description": "Number of tickets already purchased" }
       },
-      "required": ["id", "name", "ticketsBought"]
+      "required": ["id", "firstName", "lastName", "ticketsBought"]
     },
     "reservations": {
       "title": "Reservation",

@@ -15,7 +15,8 @@ import { motion, AnimatePresence } from 'motion/react';
 // --- TYPES ---
 interface Member {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email?: string;
   ticketsBought: number;
   lastEmailSentAt?: any;
@@ -281,13 +282,15 @@ export default function App() {
     let count = 0;
     for (const line of lines) {
       const parts = line.split(/[,\t]/);
-      if (parts.length >= 1 && parts[0].trim()) {
-        const name = parts[0].trim();
-        const email = parts[1]?.trim() || "";
+      if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+        const firstName = parts[0].trim();
+        const lastName = parts[1].trim();
+        const email = parts[2]?.trim() || "";
         const id = generateCode();
         await setDoc(doc(db, 'members', id), { 
           id, 
-          name, 
+          firstName,
+          lastName,
           email, 
           ticketsBought: 0,
           lastEmailSentAt: null 
@@ -299,12 +302,12 @@ export default function App() {
   };
 
   const sendMemberEmail = async (member: Member) => {
-    if (!member.email) return showToast(`Pas d'email pour ${member.name}`, "error");
+    if (!member.email) return showToast(`Pas d'email pour ${member.firstName} ${member.lastName}`, "error");
     
     // Create pre-filled link
     const prefilledUrl = new URL(window.location.origin);
     prefilledUrl.searchParams.set('code', member.id);
-    prefilledUrl.searchParams.set('name', member.name);
+    prefilledUrl.searchParams.set('name', `${member.firstName} ${member.lastName}`);
     if (member.email) prefilledUrl.searchParams.set('email', member.email);
 
     try {
@@ -313,7 +316,7 @@ export default function App() {
         subject: "Votre code d'accès Gala",
         htmlContent: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
-            <h1 style="color: #111827; font-size: 24px; font-weight: 800; margin-bottom: 16px;">Bonjour ${member.name},</h1>
+            <h1 style="color: #111827; font-size: 24px; font-weight: 800; margin-bottom: 16px;">Bonjour ${member.firstName},</h1>
             <p style="color: #4b5563; font-size: 16px; line-height: 24px;">Voici votre code d'accès personnel pour la billetterie du Gala :</p>
             <div style="font-size: 32px; font-weight: 900; color: #4f46e5; padding: 30px; background: #f3f4f6; border-radius: 12px; text-align: center; margin: 24px 0; letter-spacing: 4px;">
               ${member.id}
@@ -331,9 +334,9 @@ export default function App() {
       await updateDoc(doc(db, 'members', member.id), {
         lastEmailSentAt: serverTimestamp()
       });
-      showToast(`Email envoyé à ${member.name}`);
+      showToast(`Email envoyé à ${member.firstName} ${member.lastName}`);
     } catch (err) {
-      showToast(`Erreur d'envoi à ${member.name}`, "error");
+      showToast(`Erreur d'envoi à ${member.firstName} ${member.lastName}`, "error");
     }
   };
 
@@ -698,7 +701,7 @@ export default function App() {
               <textarea 
                 value={importText} onChange={e => setImportText(e.target.value)}
                 className="w-full h-32 p-3 border border-slate-200 rounded-xl text-sm mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Nom, Email"
+                placeholder="Prénom, Nom, Email"
               />
               <button onClick={() => handleImport(importText)} className="w-full bg-slate-900 text-white py-2 rounded-lg font-bold flex items-center justify-center">
                 <Upload className="w-4 h-4 mr-2" /> Importer et Générer Codes
@@ -756,7 +759,7 @@ export default function App() {
                         </td>
                         <td className="py-2 font-mono text-indigo-600 font-bold">{m.id}</td>
                         <td className="py-2">
-                          <div className="font-medium">{m.name}</div>
+                          <div className="font-medium">{m.firstName} {m.lastName}</div>
                           <div className="text-[10px] text-slate-400">{m.email}</div>
                         </td>
                         <td className="py-2 text-center">
