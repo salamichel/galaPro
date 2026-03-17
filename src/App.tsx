@@ -552,8 +552,22 @@ export default function App() {
   const AdminView = () => {
     const [importText, setImportText] = useState('');
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+    const [editSettings, setEditSettings] = useState<AppSettings>(settings);
+
+    useEffect(() => {
+      setEditSettings(settings);
+    }, [settings]);
 
     if (!isAdmin) return <div className="p-8 text-center">Accès refusé</div>;
+
+    const handleSaveSettings = async () => {
+      try {
+        await updateDoc(doc(db, 'settings', 'global'), { ...editSettings });
+        showToast("Paramètres enregistrés avec succès");
+      } catch (err) {
+        showToast("Erreur lors de l'enregistrement", "error");
+      }
+    };
 
     const toggleMemberSelection = (id: string) => {
       setSelectedMembers(prev => 
@@ -613,6 +627,72 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="font-bold mb-4 flex items-center"><Settings className="mr-2 w-5 h-5" /> Configuration</h3>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Prix Adulte (€)</label>
+                  <input 
+                    type="number" 
+                    value={editSettings.priceAdult} 
+                    onChange={e => setEditSettings({...editSettings, priceAdult: Number(e.target.value)})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Prix Enfant (€)</label>
+                  <input 
+                    type="number" 
+                    value={editSettings.priceChild} 
+                    onChange={e => setEditSettings({...editSettings, priceChild: Number(e.target.value)})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Prix PMR (€)</label>
+                  <input 
+                    type="number" 
+                    value={editSettings.pricePmr} 
+                    onChange={e => setEditSettings({...editSettings, pricePmr: Number(e.target.value)})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Max / Danseur (Ph1)</label>
+                  <input 
+                    type="number" 
+                    value={editSettings.maxPerDancerPhase1} 
+                    onChange={e => setEditSettings({...editSettings, maxPerDancerPhase1: Number(e.target.value)})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Capacité Standard</label>
+                  <input 
+                    type="number" 
+                    value={editSettings.capacityStd} 
+                    onChange={e => setEditSettings({...editSettings, capacityStd: Number(e.target.value)})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Capacité PMR</label>
+                  <input 
+                    type="number" 
+                    value={editSettings.capacityPmr} 
+                    onChange={e => setEditSettings({...editSettings, capacityPmr: Number(e.target.value)})}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+              <button 
+                onClick={handleSaveSettings}
+                className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors"
+              >
+                Enregistrer les paramètres
+              </button>
+            </div>
+
             <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
               <h3 className="font-bold mb-4 flex items-center"><Users className="mr-2 w-5 h-5" /> Import Adhérents</h3>
               <textarea 
