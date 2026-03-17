@@ -24,10 +24,25 @@ try {
   // Allow environment variables to override file config
   const projectId = process.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId;
   const dbId = process.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId;
+  const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
 
   console.log('Initializing Firebase Admin');
+  
+  let adminConfig: admin.AppOptions = {};
+  if (serviceAccountVar) {
+    try {
+      const serviceAccount = JSON.parse(serviceAccountVar);
+      adminConfig.credential = admin.credential.cert(serviceAccount);
+      console.log('Using service account from environment variable');
+    } catch (e) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT env var as JSON');
+    }
+  } else if (projectId) {
+    adminConfig.projectId = projectId;
+  }
+
   const app = admin.apps.length === 0 
-    ? admin.initializeApp(projectId ? { projectId } : undefined) 
+    ? admin.initializeApp(adminConfig) 
     : admin.app();
     
   const finalDbId = dbId && dbId !== '(default)' ? dbId : undefined;
