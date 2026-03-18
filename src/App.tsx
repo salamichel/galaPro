@@ -40,7 +40,6 @@ interface AppSettings {
   phase: number;
   capacityStd: number;
   capacityPmr: number;
-  guestsCount: number;
   maxPerDancerPhase1: number;
   priceAdult: number;
   priceChild: number;
@@ -59,7 +58,6 @@ export default function App() {
     phase: 1,
     capacityStd: 431,
     capacityPmr: 6,
-    guestsCount: 3,
     maxPerDancerPhase1: 4,
     priceAdult: 10,
     priceChild: 7,
@@ -104,7 +102,6 @@ export default function App() {
           phase: 1,
           capacityStd: 431,
           capacityPmr: 6,
-          guestsCount: 3,
           maxPerDancerPhase1: 4,
           priceAdult: 10,
           priceChild: 7,
@@ -285,7 +282,7 @@ export default function App() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 5000);
   };
 
-  const availableStd = settings.capacityStd - settings.guestsCount - sales.adult - sales.child;
+  const availableStd = settings.capacityStd - sales.adult - sales.child;
   const availablePmr = settings.capacityPmr - sales.pmr;
 
   // --- ACTIONS ---

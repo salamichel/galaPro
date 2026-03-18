@@ -39,7 +39,6 @@
         "phase": { "type": "integer", "enum": [1, 2] },
         "capacityStd": { "type": "integer" },
         "capacityPmr": { "type": "integer" },
-        "guestsCount": { "type": "integer" },
         "maxPerDancerPhase1": { "type": "integer" },
         "priceStd": { "type": "number" },
         "pricePmr": { "type": "number" }
