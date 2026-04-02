@@ -22,14 +22,25 @@
         "buyerName": { "type": "string" },
         "buyerEmail": { "type": "string", "format": "email" },
         "dancerCode": { "type": "string" },
-        "stdCount": { "type": "integer" },
+        "adultCount": { "type": "integer" },
+        "childCount": { "type": "integer" },
         "pmrCount": { "type": "integer" },
-        "totalAmount": { "type": "number" },
+        "ticketHolders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "firstName": { "type": "string" },
+              "lastName": { "type": "string" },
+              "type": { "type": "string", "enum": ["adult", "child", "pmr"] }
+            }
+          }
+        },
         "status": { "type": "string", "enum": ["pending", "completed", "cancelled"] },
         "createdAt": { "type": "string", "format": "date-time" },
-        "helloAssoOrderId": { "type": "string" }
+        "helloAssoId": { "type": "string" }
       },
-      "required": ["buyerName", "buyerEmail", "stdCount", "pmrCount", "status", "createdAt"]
+      "required": ["buyerName", "buyerEmail", "status", "createdAt"]
     },
     "settings": {
       "title": "Settings",

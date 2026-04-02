@@ -58,13 +58,25 @@ try {
   console.error('Error initializing Firebase Admin:', error);
 }
 
-async function sendConfirmationEmail(to: string, name: string, adult: number, child: number, pmr: number) {
+async function sendConfirmationEmail(to: string, name: string, adult: number, child: number, pmr: number, ticketHolders?: any[], reservationId?: string) {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return;
 
   try {
     const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@gala-manager.com';
     const senderName = process.env.BREVO_SENDER_NAME || 'Gala Manager';
+    const appUrl = process.env.APP_URL || 'https://ais-dev-fx6kwd7qvtdrkjxdqmpd7i-11794025507.europe-west2.run.app';
+
+    const ticketHoldersHtml = ticketHolders && ticketHolders.length > 0 
+      ? `
+        <p style="color: #4b5563; font-size: 16px; line-height: 24px; margin-top: 16px;"><strong>Participants :</strong></p>
+        <ul style="color: #4b5563; font-size: 14px; line-height: 20px;">
+          ${ticketHolders.map(th => `<li>${th.firstName} ${th.lastName} (${th.type === 'adult' ? 'Adulte' : th.type === 'child' ? 'Enfant' : 'PMR'})</li>`).join('')}
+        </ul>
+      `
+      : '';
+
+    const ticketLink = reservationId ? `${appUrl}/?view=tickets&resId=${reservationId}` : null;
 
     await axios.post('https://api.brevo.com/v3/smtp/email', {
       sender: { name: senderName, email: senderEmail },
@@ -80,7 +92,15 @@ async function sendConfirmationEmail(to: string, name: string, adult: number, ch
             ${child > 0 ? `<li>Places Enfant (-12) : ${child}</li>` : ''}
             ${pmr > 0 ? `<li>Places PMR : ${pmr}</li>` : ''}
           </ul>
-          <p style="color: #4b5563; font-size: 14px; line-height: 20px;">Vous recevrez vos billets définitifs prochainement.</p>
+          ${ticketHoldersHtml}
+          
+          ${ticketLink ? `
+          <div style="margin-top: 32px; text-align: center;">
+            <a href="${ticketLink}" style="background: #4f46e5; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">Accéder à mes Billets Électroniques</a>
+          </div>
+          <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 16px;">Vous pouvez également copier ce lien : <br/> ${ticketLink}</p>
+          ` : '<p style="color: #4b5563; font-size: 14px; line-height: 20px; margin-top: 24px;">Vous recevrez vos billets définitifs prochainement.</p>'}
+          
           <hr style="margin: 32px 0; border: 0; border-top: 1px solid #e5e7eb;" />
           <p style="color: #9ca3af; font-size: 12px; text-align: center;">Cet email a été envoyé automatiquement, merci de ne pas y répondre.</p>
         </div>
@@ -253,6 +273,7 @@ async function startServer() {
             if (!reservationsSnap.empty) {
               const reservationDoc = reservationsSnap.docs[0];
               const reservationData = reservationDoc.data();
+              intent.reservationId = reservationDoc.id;
 
               if (reservationData.status === 'pending') {
                 await reservationDoc.ref.update({ status: 'completed' });
@@ -264,7 +285,9 @@ async function startServer() {
                   reservationData.buyerName, 
                   reservationData.adultCount || 0, 
                   reservationData.childCount || 0, 
-                  reservationData.pmrCount || 0
+                  reservationData.pmrCount || 0,
+                  reservationData.ticketHolders,
+                  reservationDoc.id
                 );
                 
                 // Update member tickets if applicable
@@ -357,7 +380,9 @@ async function startServer() {
                 resData.buyerName, 
                 resData.adultCount || 0, 
                 resData.childCount || 0, 
-                resData.pmrCount || 0
+                resData.pmrCount || 0,
+                resData.ticketHolders,
+                doc.id
               );
 
               // Update member tickets

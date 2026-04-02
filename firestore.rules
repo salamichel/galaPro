@@ -8,7 +8,7 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') || 
          request.auth.token.email == "stephane.alamichel@gmail.com");
     }
 
@@ -24,10 +24,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Reservations: Anyone can create, only admin can read/update/delete
+    // Reservations: Anyone can create and view a specific ticket if they have the ID
     match /reservations/{resId} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow get: if true; // Needed for ticket viewing via email link
+      allow list, update, delete: if isAdmin();
     }
     
     // Users: Private profile

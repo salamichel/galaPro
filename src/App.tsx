@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, Component, ReactNode } from 'r
 import { 
   Users, Ticket, Settings, CheckCircle2, AlertCircle, Info,
   Upload, Lock, Unlock, ArrowRight, Mail, Loader2, Trash2,
-  Search, RefreshCw, XCircle, CheckCircle, ExternalLink
+  Search, RefreshCw, XCircle, CheckCircle, ExternalLink, Pencil,
+  Download, Printer, QrCode, ChevronLeft
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, getDoc, updateDoc, 
@@ -12,6 +13,7 @@ import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'f
 import { db, auth } from './firebase';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
+import { QRCodeSVG } from 'qrcode.react';
 
 // --- TYPES ---
 interface Member {
@@ -20,6 +22,7 @@ interface Member {
   lastName: string;
   email?: string;
   ticketsBought: number;
+  maxTicketsOverride?: number;
   lastEmailSentAt?: any;
 }
 
@@ -32,8 +35,10 @@ interface Reservation {
   adultCount: number;
   childCount: number;
   pmrCount: number;
+  ticketHolders?: { firstName: string; lastName: string; type: 'adult' | 'child' | 'pmr' }[];
   status: string;
   helloAssoId?: number;
+  createdAt?: any;
 }
 
 interface AppSettings {
@@ -67,6 +72,8 @@ export default function App() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [sales, setSales] = useState({ adult: 0, child: 0, pmr: 0 });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
+  const [ticketViewId, setTicketViewId] = useState<string | null>(null);
+  const [ticketViewReservation, setTicketViewReservation] = useState<Reservation | null>(null);
 
   // --- AUTH ---
   useEffect(() => {
@@ -113,6 +120,7 @@ export default function App() {
   }, [isAdmin]);
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [lastConfirmedResId, setLastConfirmedResId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -130,24 +138,24 @@ export default function App() {
 
         if (status === 'Success') {
           setPaymentConfirmed(true);
+          
+          if (intent.reservationId) {
+            setLastConfirmedResId(intent.reservationId);
+          }
+
           showToast(`Paiement confirmé ! Votre réservation est validée.`, "success");
           
-          // If the backend reported a firestore error, we can try to fix it here if we find the doc
-          if (intent.firestoreUpdateError) {
+          // If the backend reported a firestore error, we can try to fix it here if we have the ID
+          if (intent.firestoreUpdateError && intent.reservationId) {
             console.warn("Backend failed to update Firestore, attempting client-side update...");
             try {
-              const resQuery = query(collection(db, 'reservations'));
-              const querySnapshot = await getDocs(resQuery);
-              const docToUpdate = querySnapshot.docs.find(d => 
-                String(d.data().helloAssoId) === String(id) && d.data().status === 'pending'
-              );
-              
-              if (docToUpdate) {
-                await updateDoc(docToUpdate.ref, { status: 'completed' });
+              const resDoc = await getDoc(doc(db, 'reservations', intent.reservationId));
+              if (resDoc.exists() && resDoc.data().status === 'pending') {
+                await updateDoc(resDoc.ref, { status: 'completed' });
                 console.log("Client-side update successful after backend failure");
                 
                 // Also update member tickets if applicable
-                const resData = docToUpdate.data();
+                const resData = resDoc.data();
                 if (resData.dancerCode && resData.dancerCode !== 'PHASE_2') {
                   const memberRef = doc(db, 'members', resData.dancerCode);
                   const memberDoc = await getDoc(memberRef);
@@ -187,7 +195,38 @@ export default function App() {
       showToast(errorMsg, "error");
       window.history.replaceState({}, '', '/');
     }
+
+    // Check for ticket view
+    const view = params.get('view');
+    const resId = params.get('resId');
+    if (view === 'tickets' && resId) {
+      setTicketViewId(resId);
+      setCurrentView('booking'); // Ensure we are not in admin view
+    }
   }, []);
+
+  useEffect(() => {
+    if (ticketViewId) {
+      const fetchRes = async () => {
+        try {
+          const resDoc = await getDoc(doc(db, 'reservations', ticketViewId));
+          if (resDoc.exists()) {
+            setTicketViewReservation({ id: resDoc.id, ...resDoc.data() } as Reservation);
+          } else {
+            showToast("Réservation introuvable", "error");
+            setTicketViewId(null);
+          }
+        } catch (err) {
+          console.error("Error fetching reservation for tickets", err);
+          showToast("Erreur lors de la récupération des billets", "error");
+          setTicketViewId(null);
+        }
+      };
+      fetchRes();
+    } else {
+      setTicketViewReservation(null);
+    }
+  }, [ticketViewId]);
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     if (!confirm(`Changer le statut en "${newStatus}" ?`)) return;
@@ -195,6 +234,7 @@ export default function App() {
       await updateDoc(doc(db, 'reservations', id), { status: newStatus });
       showToast(`Statut mis à jour : ${newStatus}`);
     } catch (err) {
+      console.error("Update Status Error:", err);
       showToast("Erreur lors de la mise à jour", "error");
     }
   };
@@ -256,7 +296,7 @@ export default function App() {
     });
 
     const unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
-      setMembers(snap.docs.map(d => d.data() as Member));
+      setMembers(snap.docs.map(d => ({ ...d.data(), id: d.id } as Member)));
     });
 
     const unsubRes = onSnapshot(query(collection(db, 'reservations'), orderBy('createdAt', 'desc')), (snap) => {
@@ -369,6 +409,129 @@ export default function App() {
     showToast(`${count} emails envoyés`);
   };
 
+  const handleDeleteMember = async (id: string) => {
+    if (!confirm("Supprimer cet adhérent ?")) return;
+    try {
+      await deleteDoc(doc(db, 'members', id));
+      showToast("Adhérent supprimé");
+    } catch (err) {
+      showToast("Erreur lors de la suppression", "error");
+    }
+  };
+
+  const handleUpdateMember = async (id: string, data: Partial<Member>) => {
+    try {
+      await updateDoc(doc(db, 'members', id), data);
+      showToast("Adhérent mis à jour");
+    } catch (err) {
+      console.error("Update Member Error:", err);
+      showToast("Erreur lors de la mise à jour", "error");
+    }
+  };
+
+  // --- VUE : BILLETS ---
+  const TicketView = ({ reservation }: { reservation: Reservation }) => {
+    const handlePrint = () => {
+      window.print();
+    };
+
+    if (reservation.status !== 'completed') {
+      return (
+        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+          <AlertCircle className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Paiement en attente</h2>
+          <p className="text-slate-600 mb-6">Vos billets seront disponibles dès que le paiement sera validé par HelloAsso.</p>
+          <button onClick={() => setTicketViewId(null)} className="text-indigo-600 font-bold flex items-center justify-center mx-auto">
+            <ChevronLeft className="w-4 h-4 mr-1" /> Retour
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-4xl mx-auto space-y-8 pb-12"
+      >
+        <div className="flex items-center justify-between no-print">
+          <button onClick={() => setTicketViewId(null)} className="flex items-center text-slate-600 hover:text-indigo-600 font-medium transition-colors">
+            <ChevronLeft className="w-5 h-5 mr-1" /> Retour à la billetterie
+          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={handlePrint}
+              className="flex items-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <Printer className="w-4 h-4 mr-2" /> Imprimer
+            </button>
+          </div>
+        </div>
+
+        <div className="text-center no-print">
+          <h2 className="text-3xl font-bold text-slate-900">Vos Billets Électroniques</h2>
+          <p className="text-slate-500 mt-2">Présentez ces QR codes à l'entrée du Gala</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {reservation.ticketHolders?.map((holder, idx) => (
+            <div key={idx} className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 flex flex-col print:shadow-none print:border-slate-300">
+              <div className="bg-indigo-600 p-6 text-white flex justify-between items-center">
+                <div>
+                  <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest mb-1">Billet Gala 2026</p>
+                  <h3 className="text-xl font-bold">{holder.firstName} {holder.lastName}</h3>
+                </div>
+                <div className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm">
+                  {holder.type === 'adult' ? 'ADULTE' : holder.type === 'child' ? 'ENFANT' : 'PMR'}
+                </div>
+              </div>
+              
+              <div className="p-8 flex flex-col items-center text-center space-y-6">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <QRCodeSVG 
+                    value={`GALA2026-${reservation.id}-${idx}`} 
+                    size={180}
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-400 uppercase font-bold tracking-tighter">Référence Réservation</p>
+                  <p className="text-sm font-mono font-bold text-slate-700">{reservation.id.substring(0, 8).toUpperCase()}</p>
+                </div>
+
+                <div className="w-full pt-6 border-t border-dashed border-slate-200 grid grid-cols-2 gap-4 text-left">
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Acheteur</p>
+                    <p className="text-xs font-bold text-slate-800 truncate">{reservation.buyerName}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Date</p>
+                    <p className="text-xs font-bold text-slate-800">02 Avril 2026</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 flex items-center justify-center">
+                <p className="text-[10px] text-slate-400 font-medium italic">Ce billet est personnel et non cessible.</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <style>{`
+          @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+            .print\\:shadow-none { shadow: none !important; }
+            .print\\:border-slate-300 { border-color: #cbd5e1 !important; }
+          }
+        `}</style>
+      </motion.div>
+    );
+  };
+
   // --- VUE : RÉSERVATION ---
   const BookingView = () => {
     const [dancerCode, setDancerCode] = useState('');
@@ -378,7 +541,31 @@ export default function App() {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [buyerEmail, setBuyerEmail] = useState('');
+    const [ticketHolders, setTicketHolders] = useState<{ firstName: string; lastName: string; type: 'adult' | 'child' | 'pmr' }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Update ticket holders when counts change
+    useEffect(() => {
+      const newHolders: { firstName: string; lastName: string; type: 'adult' | 'child' | 'pmr' }[] = [];
+      
+      // Keep existing names if possible
+      const getExisting = (index: number, type: 'adult' | 'child' | 'pmr') => {
+        const existing = ticketHolders.filter(h => h.type === type)[index];
+        return existing || { firstName: '', lastName: '', type };
+      };
+
+      for (let i = 0; i < reqAdult; i++) newHolders.push(getExisting(i, 'adult'));
+      for (let i = 0; i < reqChild; i++) newHolders.push(getExisting(i, 'child'));
+      for (let i = 0; i < reqPmr; i++) newHolders.push(getExisting(i, 'pmr'));
+      
+      setTicketHolders(newHolders);
+    }, [reqAdult, reqChild, reqPmr]);
+
+    const updateHolder = (index: number, field: 'firstName' | 'lastName', value: string) => {
+      const updated = [...ticketHolders];
+      updated[index] = { ...updated[index], [field]: value };
+      setTicketHolders(updated);
+    };
 
     // Pre-fill from URL
     useEffect(() => {
@@ -411,6 +598,12 @@ export default function App() {
         return showToast("Veuillez saisir votre Prénom et votre Nom", "error");
       }
 
+      // Validate ticket holders
+      const invalidHolder = ticketHolders.some(h => !h.firstName.trim() || !h.lastName.trim());
+      if (invalidHolder) {
+        return showToast("Veuillez saisir le nom de chaque participant", "error");
+      }
+
       setIsProcessing(true);
 
       try {
@@ -420,8 +613,9 @@ export default function App() {
           if (!memberDoc.exists()) throw new Error("Code danseur invalide");
           
           const member = memberDoc.data() as Member;
-          if (member.ticketsBought + totalRequested > settings.maxPerDancerPhase1) {
-            throw new Error(`Quota dépassé (${member.ticketsBought}/${settings.maxPerDancerPhase1})`);
+          const allowedQuota = member.maxTicketsOverride || settings.maxPerDancerPhase1;
+          if (member.ticketsBought + totalRequested > allowedQuota) {
+            throw new Error(`Quota dépassé (${member.ticketsBought}/${allowedQuota})`);
           }
         }
 
@@ -446,6 +640,7 @@ export default function App() {
           adultCount: reqAdult,
           childCount: reqChild,
           pmrCount: reqPmr,
+          ticketHolders,
           status: 'pending',
           createdAt: serverTimestamp(),
           helloAssoId: checkoutRes.data.id
@@ -556,6 +751,39 @@ export default function App() {
             </div>
           </div>
 
+          {ticketHolders.length > 0 && (
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h4 className="text-sm font-bold text-slate-900">Noms des participants</h4>
+              {ticketHolders.map((holder, idx) => (
+                <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Billet #{idx + 1} - {holder.type === 'adult' ? 'Adulte' : holder.type === 'child' ? 'Enfant' : 'PMR'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input 
+                      type="text" 
+                      placeholder="Prénom" 
+                      value={holder.firstName}
+                      onChange={e => updateHolder(idx, 'firstName', e.target.value)}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Nom" 
+                      value={holder.lastName}
+                      onChange={e => updateHolder(idx, 'lastName', e.target.value)}
+                      required
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button 
             type="submit" 
             disabled={isProcessing}
@@ -574,6 +802,7 @@ export default function App() {
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
     const [editSettings, setEditSettings] = useState<AppSettings>(settings);
     const [resSearch, setResSearch] = useState('');
+    const [editingMember, setEditingMember] = useState<Member | null>(null);
 
     useEffect(() => {
       setEditSettings(settings);
@@ -787,12 +1016,19 @@ export default function App() {
                           <div className="text-[10px] text-slate-400">{m.email}</div>
                         </td>
                         <td className="py-2 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${settings.maxPerDancerPhase1 - m.ticketsBought > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                            {settings.maxPerDancerPhase1 - m.ticketsBought} / {settings.maxPerDancerPhase1}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${(m.maxTicketsOverride || settings.maxPerDancerPhase1) - m.ticketsBought > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {(m.maxTicketsOverride || settings.maxPerDancerPhase1) - m.ticketsBought} / {m.maxTicketsOverride || settings.maxPerDancerPhase1}
                           </span>
                         </td>
                         <td className="py-2 text-right">
-                          <div className="flex flex-col items-end space-y-1">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button 
+                              onClick={() => setEditingMember(m)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
+                              title="Modifier"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
                             <button 
                               onClick={() => sendMemberEmail(m)}
                               className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
@@ -800,12 +1036,19 @@ export default function App() {
                             >
                               <Mail className="w-4 h-4" />
                             </button>
-                            {m.lastEmailSentAt && (
-                              <span className="text-[8px] text-slate-400">
-                                Envoyé le {new Date(m.lastEmailSentAt.seconds * 1000).toLocaleDateString()}
-                              </span>
-                            )}
+                            <button 
+                              onClick={() => handleDeleteMember(m.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
+                          {m.lastEmailSentAt && (
+                            <span className="text-[8px] text-slate-400 block">
+                              Envoyé le {new Date(m.lastEmailSentAt.seconds * 1000).toLocaleDateString()}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -814,6 +1057,104 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          <AnimatePresence>
+            {editingMember && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-100"
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold text-slate-900">Modifier Adhérent</h3>
+                    <button onClick={() => setEditingMember(null)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                      <XCircle className="w-5 h-5 text-slate-400" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Prénom</label>
+                      <input 
+                        type="text" 
+                        value={editingMember.firstName} 
+                        onChange={e => setEditingMember({...editingMember, firstName: e.target.value})}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Nom</label>
+                      <input 
+                        type="text" 
+                        value={editingMember.lastName} 
+                        onChange={e => setEditingMember({...editingMember, lastName: e.target.value})}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                      <input 
+                        type="email" 
+                        value={editingMember.email || ''} 
+                        onChange={e => setEditingMember({...editingMember, email: e.target.value})}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Places déjà achetées</label>
+                      <input 
+                        type="number" 
+                        value={editingMember.ticketsBought} 
+                        onChange={e => setEditingMember({...editingMember, ticketsBought: Number(e.target.value)})}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Quota Spécifique (optionnel)</label>
+                      <input 
+                        type="number" 
+                        placeholder={`Par défaut: ${settings.maxPerDancerPhase1}`}
+                        value={editingMember.maxTicketsOverride || ''} 
+                        onChange={e => setEditingMember({...editingMember, maxTicketsOverride: e.target.value ? Number(e.target.value) : undefined})}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex gap-3">
+                    <button 
+                      onClick={() => setEditingMember(null)}
+                      className="flex-1 px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        const updateData: any = {
+                          firstName: editingMember.firstName,
+                          lastName: editingMember.lastName,
+                          email: editingMember.email || "",
+                          ticketsBought: editingMember.ticketsBought
+                        };
+                        
+                        if (editingMember.maxTicketsOverride !== undefined) {
+                          updateData.maxTicketsOverride = editingMember.maxTicketsOverride;
+                        }
+
+                        await handleUpdateMember(editingMember.id, updateData);
+                        setEditingMember(null);
+                      }}
+                      className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                    >
+                      Enregistrer
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
@@ -857,6 +1198,17 @@ export default function App() {
                             <span className="flex items-center font-mono">ID: {res.helloAssoId}</span>
                             <span className="font-medium text-slate-400">{dateStr}</span>
                           </div>
+
+                          {res.ticketHolders && res.ticketHolders.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+                              {res.ticketHolders.map((th, i) => (
+                                <span key={i} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9px] font-medium border border-indigo-100">
+                                  {th.firstName} {th.lastName} ({th.type === 'adult' ? 'Ad' : th.type === 'child' ? 'Enf' : 'PMR'})
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           <div className="mt-2 flex items-center gap-3">
                             <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
                               <span className="text-indigo-600">{res.adultCount}</span> Ad
@@ -874,6 +1226,15 @@ export default function App() {
                         </div>
 
                         <div className="flex items-center gap-2 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                          {res.status === 'completed' && (
+                            <button 
+                              onClick={() => setTicketViewId(res.id)}
+                              className="p-2 bg-white border border-slate-200 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              title="Voir les billets"
+                            >
+                              <QrCode className="w-4 h-4" />
+                            </button>
+                          )}
                           {res.status === 'pending' && (
                             <button 
                               onClick={() => handleManualCheckStatus(res)}
@@ -930,12 +1291,22 @@ export default function App() {
       <p className="text-slate-500 mb-8">
         Votre réservation a été confirmée avec succès. Vous allez recevoir un email récapitulatif d'ici quelques instants.
       </p>
-      <button 
-        onClick={() => setPaymentConfirmed(false)}
-        className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-lg hover:bg-slate-800 transition-all"
-      >
-        Retour à l'accueil
-      </button>
+      <div className="space-y-3">
+        {lastConfirmedResId && (
+          <button 
+            onClick={() => setTicketViewId(lastConfirmedResId)}
+            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all flex items-center justify-center"
+          >
+            <QrCode className="w-5 h-5 mr-2" /> Voir mes Billets
+          </button>
+        )}
+        <button 
+          onClick={() => { setPaymentConfirmed(false); setLastConfirmedResId(null); }}
+          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-lg hover:bg-slate-800 transition-all"
+        >
+          Retour à l'accueil
+        </button>
+      </div>
     </div>
   );
 
@@ -980,7 +1351,13 @@ export default function App() {
         </nav>
 
         <main className="max-w-7xl mx-auto px-4 py-12">
-          {paymentConfirmed ? <PaymentSuccessView /> : (currentView === 'booking' ? <BookingView /> : <AdminView />)}
+          {ticketViewReservation ? (
+            <TicketView reservation={ticketViewReservation} />
+          ) : paymentConfirmed ? (
+            <PaymentSuccessView />
+          ) : (
+            currentView === 'booking' ? <BookingView /> : <AdminView />
+          )}
         </main>
       </div>
   );
