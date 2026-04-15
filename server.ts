@@ -67,12 +67,26 @@ async function sendConfirmationEmail(to: string, name: string, adult: number, ch
     const senderName = process.env.BREVO_SENDER_NAME || 'Gala Manager';
     const appUrl = process.env.APP_URL || 'https://ais-dev-fx6kwd7qvtdrkjxdqmpd7i-11794025507.europe-west2.run.app';
 
-    const ticketHoldersHtml = ticketHolders && ticketHolders.length > 0 
+    const adminLink = reservationId ? `${appUrl}/?view=admin-check&resId=${reservationId}` : null;
+
+    const ticketHoldersTable = ticketHolders && ticketHolders.length > 0 
       ? `
-        <p style="color: #4b5563; font-size: 16px; line-height: 24px; margin-top: 16px;"><strong>Participants :</strong></p>
-        <ul style="color: #4b5563; font-size: 14px; line-height: 20px;">
-          ${ticketHolders.map(th => `<li>${th.firstName} ${th.lastName} (${th.type === 'adult' ? 'Adulte' : th.type === 'child' ? 'Enfant' : 'PMR'})</li>`).join('')}
-        </ul>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 16px; border: 1px solid #e5e7eb;">
+          <thead>
+            <tr style="background-color: #f9fafb;">
+              <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #4b5563; font-size: 14px;">Participant</th>
+              <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #4b5563; font-size: 14px;">Type de place</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ticketHolders.map((th) => `
+              <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-weight: 500;">${th.firstName} ${th.lastName}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 14px;">${th.type === 'adult' ? 'Adulte' : th.type === 'child' ? 'Enfant' : 'PMR'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       `
       : '';
 
@@ -81,28 +95,48 @@ async function sendConfirmationEmail(to: string, name: string, adult: number, ch
     await axios.post('https://api.brevo.com/v3/smtp/email', {
       sender: { name: senderName, email: senderEmail },
       to: [{ email: to }],
-      subject: "Confirmation de votre réservation - Gala",
+      subject: "Confirmation de commande - Preuve d'achat Gala",
       htmlContent: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
-          <h1 style="color: #111827; font-size: 24px; font-weight: 800; margin-bottom: 16px;">Merci pour votre réservation !</h1>
+          <div style="text-align: center; margin-bottom: 24px;">
+            <h1 style="color: #4f46e5; font-size: 28px; font-weight: 800; margin-bottom: 8px;">CONFIRMATION DE COMMANDE</h1>
+            <p style="color: #6b7280; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Référence : <strong>${reservationId?.substring(0, 8).toUpperCase()}</strong></p>
+          </div>
+
+          <div style="background: #fef2f2; border: 1px solid #fee2e2; padding: 16px; border-radius: 8px; margin-bottom: 24px; text-align: center;">
+            <p style="color: #b91c1c; font-weight: bold; margin: 0; font-size: 14px;">⚠️ CET EMAIL FAIT OFFICE DE PREUVE D'ACHAT ⚠️</p>
+            <p style="color: #b91c1c; margin: 4px 0 0 0; font-size: 12px;">Veuillez présenter cet email (imprimé ou sur votre téléphone) à l'entrée du spectacle.</p>
+          </div>
+
           <p style="color: #4b5563; font-size: 16px; line-height: 24px;">Bonjour ${name},</p>
-          <p style="color: #4b5563; font-size: 16px; line-height: 24px;">Votre paiement a été validé avec succès. Voici le détail de vos places :</p>
-          <ul style="color: #111827; font-size: 16px; font-weight: bold;">
-            ${adult > 0 ? `<li>Places Adulte (13+) : ${adult}</li>` : ''}
-            ${child > 0 ? `<li>Places Enfant (-12) : ${child}</li>` : ''}
-            ${pmr > 0 ? `<li>Places PMR : ${pmr}</li>` : ''}
-          </ul>
-          ${ticketHoldersHtml}
+          <p style="color: #4b5563; font-size: 16px; line-height: 24px;">Nous vous confirmons la réception de votre commande pour le Gala. Voici le récapitulatif de vos places :</p>
+          
+          <div style="margin-top: 24px;">
+            <h3 style="color: #111827; font-size: 18px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 16px;">Détail des participants</h3>
+            ${ticketHoldersTable}
+          </div>
+
+          <div style="margin-top: 24px; padding: 16px; background: #f9fafb; border-radius: 8px;">
+            <h3 style="color: #111827; font-size: 16px; margin-top: 0; margin-bottom: 12px;">Récapitulatif</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #4b5563; font-size: 14px;">
+              ${adult > 0 ? `<li>Places Adulte (13+) : <strong>${adult}</strong></li>` : ''}
+              ${child > 0 ? `<li>Places Enfant (-12) : <strong>${child}</strong></li>` : ''}
+              ${pmr > 0 ? `<li>Places PMR : <strong>${pmr}</strong></li>` : ''}
+            </ul>
+          </div>
           
           ${ticketLink ? `
           <div style="margin-top: 32px; text-align: center;">
-            <a href="${ticketLink}" style="background: #4f46e5; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">Accéder à mes Billets Électroniques</a>
+            <a href="${ticketLink}" style="background: #4f46e5; color: white; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">Voir ma preuve d'achat en ligne</a>
           </div>
-          <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 16px;">Vous pouvez également copier ce lien : <br/> ${ticketLink}</p>
-          ` : '<p style="color: #4b5563; font-size: 14px; line-height: 20px; margin-top: 24px;">Vous recevrez vos billets définitifs prochainement.</p>'}
+          ` : ''}
           
           <hr style="margin: 32px 0; border: 0; border-top: 1px solid #e5e7eb;" />
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">Cet email a été envoyé automatiquement, merci de ne pas y répondre.</p>
+          <p style="color: #9ca3af; font-size: 12px; text-align: center;">Gala Manager - Cet email a été envoyé automatiquement.</p>
+          
+          <div style="margin-top: 40px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db;">
+            <p style="margin: 0; font-size: 10px; color: #9ca3af; text-align: center;">Lien réservé à l'administration : <a href="${adminLink}" style="color: #6366f1;">Vérifier la conformité</a></p>
+          </div>
         </div>
       `
     }, {

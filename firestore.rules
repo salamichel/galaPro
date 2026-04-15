@@ -20,8 +20,8 @@ service cloud.firestore {
 
     // Members: Admin can do everything, users can read if they know the ID (for validation)
     match /members/{memberId} {
-      allow read: if true; // Needed for validation in phase 1
-      allow write: if isAdmin();
+      allow get: if true; // Needed for validation in phase 1
+      allow list, write: if isAdmin();
     }
 
     // Reservations: Anyone can create and view a specific ticket if they have the ID

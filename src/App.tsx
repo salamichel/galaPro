@@ -3,7 +3,7 @@ import {
   Users, Ticket, Settings, CheckCircle2, AlertCircle, Info,
   Upload, Lock, Unlock, ArrowRight, Mail, Loader2, Trash2,
   Search, RefreshCw, XCircle, CheckCircle, ExternalLink, Pencil,
-  Download, Printer, QrCode, ChevronLeft
+  Download, Printer, ChevronLeft, FileText, ShieldCheck
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, getDoc, updateDoc, 
@@ -13,7 +13,6 @@ import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'f
 import { db, auth } from './firebase';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
-import { QRCodeSVG } from 'qrcode.react';
 
 // --- TYPES ---
 interface Member {
@@ -121,6 +120,8 @@ export default function App() {
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [lastConfirmedResId, setLastConfirmedResId] = useState<string | null>(null);
+  const [adminCheckId, setAdminCheckId] = useState<string | null>(null);
+  const [adminCheckReservation, setAdminCheckReservation] = useState<Reservation | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -202,8 +203,34 @@ export default function App() {
     if (view === 'tickets' && resId) {
       setTicketViewId(resId);
       setCurrentView('booking'); // Ensure we are not in admin view
+    } else if (view === 'admin-check' && resId) {
+      setAdminCheckId(resId);
+      setCurrentView('admin');
     }
   }, []);
+
+  useEffect(() => {
+    if (adminCheckId) {
+      const fetchRes = async () => {
+        try {
+          const resDoc = await getDoc(doc(db, 'reservations', adminCheckId));
+          if (resDoc.exists()) {
+            setAdminCheckReservation({ id: resDoc.id, ...resDoc.data() } as Reservation);
+          } else {
+            showToast("Réservation introuvable", "error");
+            setAdminCheckId(null);
+          }
+        } catch (err) {
+          console.error("Error fetching reservation for admin check", err);
+          showToast("Erreur lors de la récupération de la commande", "error");
+          setAdminCheckId(null);
+        }
+      };
+      fetchRes();
+    } else {
+      setAdminCheckReservation(null);
+    }
+  }, [adminCheckId]);
 
   useEffect(() => {
     if (ticketViewId) {
@@ -295,27 +322,32 @@ export default function App() {
       if (doc.exists()) setSettings(doc.data() as AppSettings);
     });
 
-    const unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
-      setMembers(snap.docs.map(d => ({ ...d.data(), id: d.id } as Member)));
-    });
+    let unsubMembers = () => {};
+    let unsubRes = () => {};
 
-    const unsubRes = onSnapshot(query(collection(db, 'reservations'), orderBy('createdAt', 'desc')), (snap) => {
-      const resData = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
-      setReservations(resData);
-      
-      // Calculate sales
-      const totalAdult = resData.reduce((acc, r) => acc + (r.status === 'completed' ? (r.adultCount || 0) : 0), 0);
-      const totalChild = resData.reduce((acc, r) => acc + (r.status === 'completed' ? (r.childCount || 0) : 0), 0);
-      const totalPmr = resData.reduce((acc, r) => acc + (r.status === 'completed' ? (r.pmrCount || 0) : 0), 0);
-      setSales({ adult: totalAdult, child: totalChild, pmr: totalPmr });
-    });
+    if (isAdmin) {
+      unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
+        setMembers(snap.docs.map(d => ({ ...d.data(), id: d.id } as Member)));
+      });
+
+      unsubRes = onSnapshot(query(collection(db, 'reservations'), orderBy('createdAt', 'desc')), (snap) => {
+        const resData = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
+        setReservations(resData);
+        
+        // Calculate sales
+        const totalAdult = resData.reduce((acc, r) => acc + (r.status === 'completed' ? (r.adultCount || 0) : 0), 0);
+        const totalChild = resData.reduce((acc, r) => acc + (r.status === 'completed' ? (r.childCount || 0) : 0), 0);
+        const totalPmr = resData.reduce((acc, r) => acc + (r.status === 'completed' ? (r.pmrCount || 0) : 0), 0);
+        setSales({ adult: totalAdult, child: totalChild, pmr: totalPmr });
+      });
+    }
 
     return () => {
       unsubSettings();
       unsubMembers();
       unsubRes();
     };
-  }, []);
+  }, [isAdmin]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ show: true, message, type });
@@ -469,55 +501,83 @@ export default function App() {
         </div>
 
         <div className="text-center no-print">
-          <h2 className="text-3xl font-bold text-slate-900">Vos Billets Électroniques</h2>
-          <p className="text-slate-500 mt-2">Présentez ces QR codes à l'entrée du Gala</p>
+          <h2 className="text-3xl font-bold text-slate-900">Votre Preuve d'Achat</h2>
+          <p className="text-slate-500 mt-2">Présentez ce document à l'entrée du Gala</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {reservation.ticketHolders?.map((holder, idx) => (
-            <div key={idx} className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 flex flex-col print:shadow-none print:border-slate-300">
-              <div className="bg-indigo-600 p-6 text-white flex justify-between items-center">
-                <div>
-                  <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest mb-1">Billet Gala 2026</p>
-                  <h3 className="text-xl font-bold">{holder.firstName} {holder.lastName}</h3>
-                </div>
-                <div className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm">
-                  {holder.type === 'adult' ? 'ADULTE' : holder.type === 'child' ? 'ENFANT' : 'PMR'}
-                </div>
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 print:shadow-none print:border-slate-300">
+          <div className="bg-indigo-600 p-8 text-white text-center">
+            <h3 className="text-2xl font-bold">Gala 2026</h3>
+            <p className="text-indigo-100 mt-1">Référence : {reservation.id.substring(0, 8).toUpperCase()}</p>
+          </div>
+          
+          <div className="p-8 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-8 border-b border-slate-100">
+              <div>
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Acheteur</p>
+                <p className="text-lg font-bold text-slate-900">{reservation.buyerName}</p>
+                <p className="text-slate-500 text-sm">{reservation.buyerEmail}</p>
               </div>
-              
-              <div className="p-8 flex flex-col items-center text-center space-y-6">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <QRCodeSVG 
-                    value={`GALA2026-${reservation.id}-${idx}`} 
-                    size={180}
-                    level="H"
-                    includeMargin={true}
-                  />
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-400 uppercase font-bold tracking-tighter">Référence Réservation</p>
-                  <p className="text-sm font-mono font-bold text-slate-700">{reservation.id.substring(0, 8).toUpperCase()}</p>
-                </div>
-
-                <div className="w-full pt-6 border-t border-dashed border-slate-200 grid grid-cols-2 gap-4 text-left">
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Acheteur</p>
-                    <p className="text-xs font-bold text-slate-800 truncate">{reservation.buyerName}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Date</p>
-                    <p className="text-xs font-bold text-slate-800">02 Avril 2026</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 flex items-center justify-center">
-                <p className="text-[10px] text-slate-400 font-medium italic">Ce billet est personnel et non cessible.</p>
+              <div className="md:text-right">
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Date de l'événement</p>
+                <p className="text-lg font-bold text-slate-900">02 Avril 2026</p>
+                <p className="text-slate-500 text-sm">Ouverture des portes : 19h30</p>
               </div>
             </div>
-          ))}
+
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-4">Liste des Participants</h4>
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase">Nom du Participant</th>
+                      <th className="px-6 py-3 text-xs font-bold text-slate-500 uppercase">Type de Billet</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {reservation.ticketHolders?.map((holder, idx) => (
+                      <tr key={idx}>
+                        <td className="px-6 py-4 text-sm font-medium text-slate-900">{holder.firstName} {holder.lastName}</td>
+                        <td className="px-6 py-4 text-sm text-slate-500">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            holder.type === 'adult' ? 'bg-blue-100 text-blue-800' : 
+                            holder.type === 'child' ? 'bg-green-100 text-green-800' : 
+                            'bg-purple-100 text-purple-800'
+                          }`}>
+                            {holder.type === 'adult' ? 'ADULTE' : holder.type === 'child' ? 'ENFANT' : 'PMR'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="text-center md:text-left">
+                <p className="text-xs text-slate-400 uppercase font-bold">Récapitulatif de la commande</p>
+                <p className="text-sm text-slate-600 mt-1">
+                  {reservation.adultCount > 0 && `${reservation.adultCount} Adulte(s) `}
+                  {reservation.childCount > 0 && `${reservation.childCount} Enfant(s) `}
+                  {reservation.pmrCount > 0 && `${reservation.pmrCount} PMR `}
+                </p>
+              </div>
+              <div className="text-center md:text-right">
+                <p className="text-xs text-slate-400 uppercase font-bold">Total Payé</p>
+                <p className="text-2xl font-black text-indigo-600">
+                  {((reservation.adultCount || 0) * settings.priceAdult + 
+                    (reservation.childCount || 0) * settings.priceChild + 
+                    (reservation.pmrCount || 0) * settings.pricePmr).toFixed(2)}€
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center pt-4">
+              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Document officiel - Gala Manager</p>
+            </div>
+          </div>
         </div>
 
         <style>{`
@@ -532,9 +592,117 @@ export default function App() {
     );
   };
 
+  const AdminCheckView = ({ reservation }: { reservation: Reservation }) => {
+    if (!isAdmin) {
+      return (
+        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+          <Lock className="w-16 h-16 text-rose-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Accès Restreint</h2>
+          <p className="text-slate-600 mb-6">Vous devez être administrateur pour accéder à cette page.</p>
+          <button onClick={() => setAdminCheckId(null)} className="text-indigo-600 font-bold">Retour</button>
+        </div>
+      );
+    }
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-4xl mx-auto space-y-6"
+      >
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setAdminCheckId(null); if (currentView === 'admin') setCurrentView('admin'); }} className="flex items-center text-slate-600 hover:text-indigo-600 font-medium">
+            <ChevronLeft className="w-5 h-5 mr-1" /> Retour
+          </button>
+          <div className="flex gap-2">
+            <span className={`px-4 py-1 rounded-full text-xs font-bold ${
+              reservation.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 
+              reservation.status === 'cancelled' ? 'bg-rose-100 text-rose-700' : 
+              'bg-amber-100 text-amber-700'
+            }`}>
+              {reservation.status.toUpperCase()}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+          <div className="bg-slate-900 p-8 text-white">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Détails de la Commande</p>
+                <h2 className="text-3xl font-bold">{reservation.buyerName}</h2>
+                <p className="text-slate-400 mt-1">{reservation.buyerEmail}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">ID Réservation</p>
+                <p className="text-xl font-mono font-bold text-indigo-400">{reservation.id.toUpperCase()}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="space-y-4">
+              <h3 className="font-bold text-slate-900 flex items-center"><Users className="w-4 h-4 mr-2 text-indigo-600" /> Participants</h3>
+              <div className="space-y-2">
+                {reservation.ticketHolders?.map((h, i) => (
+                  <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="font-bold text-sm">{h.firstName} {h.lastName}</p>
+                    <p className="text-[10px] text-slate-500 uppercase">{h.type === 'adult' ? 'Adulte' : h.type === 'child' ? 'Enfant' : 'PMR'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-bold text-slate-900 flex items-center"><Ticket className="w-4 h-4 mr-2 text-indigo-600" /> Récapitulatif Places</h3>
+              <div className="space-y-2">
+                {reservation.adultCount > 0 && <div className="flex justify-between text-sm"><span>Adulte (13+)</span> <span className="font-bold">{reservation.adultCount}</span></div>}
+                {reservation.childCount > 0 && <div className="flex justify-between text-sm"><span>Enfant (-12)</span> <span className="font-bold">{reservation.childCount}</span></div>}
+                {reservation.pmrCount > 0 && <div className="flex justify-between text-sm"><span>PMR</span> <span className="font-bold">{reservation.pmrCount}</span></div>}
+                <div className="pt-2 border-t border-slate-100 flex justify-between font-bold text-indigo-600">
+                  <span>Total</span>
+                  <span>{(reservation.adultCount * settings.priceAdult) + (reservation.childCount * settings.priceChild) + (reservation.pmrCount * settings.pricePmr)}€</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-bold text-slate-900 flex items-center"><Settings className="w-4 h-4 mr-2 text-indigo-600" /> Actions Admin</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {reservation.status !== 'completed' && (
+                  <button 
+                    onClick={() => handleUpdateStatus(reservation.id, 'completed')}
+                    className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-colors flex items-center justify-center"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" /> Valider la commande
+                  </button>
+                )}
+                {reservation.status !== 'cancelled' && (
+                  <button 
+                    onClick={() => handleUpdateStatus(reservation.id, 'cancelled')}
+                    className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold text-sm hover:bg-rose-700 transition-colors flex items-center justify-center"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" /> Annuler la commande
+                  </button>
+                )}
+                <button 
+                  onClick={() => setTicketViewId(reservation.id)}
+                  className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center justify-center"
+                >
+                  <FileText className="w-4 h-4 mr-2" /> Voir Preuve d'Achat (Aperçu)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
   // --- VUE : RÉSERVATION ---
   const BookingView = () => {
     const [dancerCode, setDancerCode] = useState('');
+    const [memberInfo, setMemberInfo] = useState<Member | null>(null);
     const [reqAdult, setReqAdult] = useState(0);
     const [reqChild, setReqChild] = useState(0);
     const [reqPmr, setReqPmr] = useState(0);
@@ -543,6 +711,27 @@ export default function App() {
     const [buyerEmail, setBuyerEmail] = useState('');
     const [ticketHolders, setTicketHolders] = useState<{ firstName: string; lastName: string; type: 'adult' | 'child' | 'pmr' }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Validate dancer code and fetch info
+    useEffect(() => {
+      const validateCode = async () => {
+        if (settings.phase === 1 && dancerCode.trim().length >= 6) {
+          try {
+            const mDoc = await getDoc(doc(db, 'members', dancerCode.trim().toUpperCase()));
+            if (mDoc.exists()) {
+              setMemberInfo({ id: mDoc.id, ...mDoc.data() } as Member);
+            } else {
+              setMemberInfo(null);
+            }
+          } catch (err) {
+            setMemberInfo(null);
+          }
+        } else {
+          setMemberInfo(null);
+        }
+      };
+      validateCode();
+    }, [dancerCode, settings.phase]);
 
     // Update ticket holders when counts change
     useEffect(() => {
@@ -725,8 +914,28 @@ export default function App() {
           {settings.phase === 1 && (
             <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
               <label className="block text-sm font-medium text-indigo-900 mb-1">Code Danseur *</label>
-              <input type="text" value={dancerCode} onChange={e => setDancerCode(e.target.value)} required className="w-full px-4 py-2 border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" />
-              <p className="text-xs text-indigo-600 mt-2">Max {settings.maxPerDancerPhase1} places par danseur.</p>
+              <input 
+                type="text" 
+                value={dancerCode} 
+                onChange={e => setDancerCode(e.target.value.toUpperCase())} 
+                required 
+                placeholder="Ex: AB1234"
+                className="w-full px-4 py-2 border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 uppercase" 
+              />
+              {memberInfo ? (
+                <div className="mt-3 flex items-center justify-between bg-white/50 p-2 rounded-lg border border-indigo-100">
+                  <span className="text-xs font-bold text-indigo-700">
+                    {memberInfo.firstName} {memberInfo.lastName}
+                  </span>
+                  <span className="text-xs font-black text-indigo-600">
+                    Places restantes : {Math.max(0, (memberInfo.maxTicketsOverride || settings.maxPerDancerPhase1) - memberInfo.ticketsBought)}
+                  </span>
+                </div>
+              ) : dancerCode.length >= 6 ? (
+                <p className="text-xs text-rose-500 mt-2 font-bold">Code inconnu</p>
+              ) : (
+                <p className="text-xs text-indigo-600 mt-2">Max {settings.maxPerDancerPhase1} places par danseur.</p>
+              )}
             </div>
           )}
 
@@ -1230,9 +1439,9 @@ export default function App() {
                             <button 
                               onClick={() => setTicketViewId(res.id)}
                               className="p-2 bg-white border border-slate-200 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-colors"
-                              title="Voir les billets"
+                              title="Voir Preuve d'Achat"
                             >
-                              <QrCode className="w-4 h-4" />
+                              <FileText className="w-4 h-4" />
                             </button>
                           )}
                           {res.status === 'pending' && (
@@ -1297,7 +1506,7 @@ export default function App() {
             onClick={() => setTicketViewId(lastConfirmedResId)}
             className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all flex items-center justify-center"
           >
-            <QrCode className="w-5 h-5 mr-2" /> Voir mes Billets
+            <FileText className="w-5 h-5 mr-2" /> Voir ma Preuve d'Achat
           </button>
         )}
         <button 
@@ -1340,7 +1549,9 @@ export default function App() {
             </div>
             <div className="flex items-center space-x-4">
               <button onClick={() => setCurrentView('booking')} className={`text-sm font-bold ${currentView === 'booking' ? 'text-indigo-600' : 'text-slate-500'}`}>Billetterie</button>
-              {isAdmin && <button onClick={() => setCurrentView('admin')} className={`text-sm font-bold ${currentView === 'admin' ? 'text-indigo-600' : 'text-slate-500'}`}>Admin</button>}
+              {isAdmin && (
+                <button onClick={() => setCurrentView('admin')} className={`text-sm font-bold ${currentView === 'admin' ? 'text-indigo-600' : 'text-slate-500'}`}>Admin</button>
+              )}
               {!user ? (
                 <button onClick={login} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Connexion</button>
               ) : (
@@ -1351,7 +1562,9 @@ export default function App() {
         </nav>
 
         <main className="max-w-7xl mx-auto px-4 py-12">
-          {ticketViewReservation ? (
+          {adminCheckReservation ? (
+            <AdminCheckView reservation={adminCheckReservation} />
+          ) : ticketViewReservation ? (
             <TicketView reservation={ticketViewReservation} />
           ) : paymentConfirmed ? (
             <PaymentSuccessView />

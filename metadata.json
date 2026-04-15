@@ -1,5 +1,5 @@
 {
   "name": "GalaPro - Billetterie de Gala",
   "description": "Application de réservation de places pour gala avec gestion des quotas adhérents, paiement HelloAsso et emails Brevo.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["camera"]
 }
