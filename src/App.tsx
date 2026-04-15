@@ -1063,6 +1063,11 @@ export default function App() {
       }
     };
 
+    const totalRevenue = (sales.adult * settings.priceAdult) + (sales.child * settings.priceChild) + (sales.pmrCount * settings.pricePmr);
+    const completedRes = reservations.filter(r => r.status === 'completed').length;
+    const pendingRes = reservations.filter(r => r.status === 'pending').length;
+    const activeMembers = members.filter(m => m.ticketsBought > 0).length;
+
     return (
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col md:flex-row items-center justify-between border border-slate-100">
@@ -1076,18 +1081,51 @@ export default function App() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <Ticket className="text-indigo-500" />
-              <span className="text-2xl font-bold">{sales.adult + sales.child} / {settings.capacityStd}</span>
+              <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><Ticket className="w-5 h-5" /></div>
+              <span className="text-xl font-black text-slate-900">{sales.adult + sales.child} / {settings.capacityStd}</span>
             </div>
-            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div className="bg-indigo-500 h-full" style={{ width: `${((sales.adult + sales.child) / settings.capacityStd) * 100}%` }} />
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-indigo-600 h-full" style={{ width: `${Math.min(100, ((sales.adult + sales.child) / settings.capacityStd) * 100)}%` }} />
             </div>
-            <p className="text-xs text-slate-400 mt-2">Ventes Standard (Adultes: {sales.adult}, Enfants: {sales.child})</p>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-3 tracking-wider">Ventes Standard</p>
           </div>
-          {/* Similar cards for PMR and Total Revenue */}
+
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2 bg-purple-50 rounded-lg text-purple-600"><Users className="w-5 h-5" /></div>
+              <span className="text-xl font-black text-slate-900">{sales.pmr} / {settings.capacityPmr}</span>
+            </div>
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-purple-600 h-full" style={{ width: `${Math.min(100, (sales.pmr / settings.capacityPmr) * 100)}%` }} />
+            </div>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-3 tracking-wider">Ventes PMR</p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600"><CheckCircle2 className="w-5 h-5" /></div>
+              <span className="text-xl font-black text-slate-900">{totalRevenue.toFixed(2)}€</span>
+            </div>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-3 tracking-wider">Chiffre d'Affaires</p>
+            <div className="mt-1 flex gap-2">
+              <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">{completedRes} Payés</span>
+              <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">{pendingRes} En attente</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Users className="w-5 h-5" /></div>
+              <span className="text-xl font-black text-slate-900">{activeMembers} / {members.length}</span>
+            </div>
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-blue-600 h-full" style={{ width: `${Math.min(100, (activeMembers / (members.length || 1)) * 100)}%` }} />
+            </div>
+            <p className="text-[10px] uppercase font-bold text-slate-400 mt-3 tracking-wider">Adhérents Actifs</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
