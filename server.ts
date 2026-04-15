@@ -63,8 +63,8 @@ async function sendConfirmationEmail(to: string, name: string, adult: number, ch
   if (!apiKey) return;
 
   try {
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@gala-manager.com';
-    const senderName = process.env.BREVO_SENDER_NAME || 'Gala Manager';
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@etviedanse.com';
+    const senderName = process.env.BREVO_SENDER_NAME || 'Association Et vie danse';
     const appUrl = process.env.APP_URL || 'https://ais-dev-fx6kwd7qvtdrkjxdqmpd7i-11794025507.europe-west2.run.app';
 
     const adminLink = reservationId ? `${appUrl}/?view=admin-check&resId=${reservationId}` : null;
@@ -99,7 +99,8 @@ async function sendConfirmationEmail(to: string, name: string, adult: number, ch
       htmlContent: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
           <div style="text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #4f46e5; font-size: 28px; font-weight: 800; margin-bottom: 8px;">CONFIRMATION DE COMMANDE</h1>
+            <h1 style="color: #4f46e5; font-size: 28px; font-weight: 800; margin-bottom: 4px; text-transform: uppercase;">ET VIE DANSE</h1>
+            <h2 style="color: #111827; font-size: 20px; font-weight: 700; margin-top: 0; margin-bottom: 8px;">CONFIRMATION DE COMMANDE</h2>
             <p style="color: #6b7280; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Référence : <strong>${reservationId?.substring(0, 8).toUpperCase()}</strong></p>
           </div>
 
@@ -132,7 +133,7 @@ async function sendConfirmationEmail(to: string, name: string, adult: number, ch
           ` : ''}
           
           <hr style="margin: 32px 0; border: 0; border-top: 1px solid #e5e7eb;" />
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">Gala Manager - Cet email a été envoyé automatiquement.</p>
+          <p style="color: #9ca3af; font-size: 12px; text-align: center;">Association Et vie danse - Cet email a été envoyé automatiquement.</p>
           
           <div style="margin-top: 40px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db;">
             <p style="margin: 0; font-size: 10px; color: #9ca3af; text-align: center;">Lien réservé à l'administration : <a href="${adminLink}" style="color: #6366f1;">Vérifier la conformité</a></p>

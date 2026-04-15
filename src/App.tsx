@@ -507,8 +507,8 @@ export default function App() {
 
         <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 print:shadow-none print:border-slate-300">
           <div className="bg-indigo-600 p-8 text-white text-center">
-            <h3 className="text-2xl font-bold">Gala 2026</h3>
-            <p className="text-indigo-100 mt-1">Référence : {reservation.id.substring(0, 8).toUpperCase()}</p>
+            <h3 className="text-2xl font-bold uppercase tracking-tight">Et vie danse</h3>
+            <p className="text-indigo-100 mt-1">Gala 2026 - Référence : {reservation.id.substring(0, 8).toUpperCase()}</p>
           </div>
           
           <div className="p-8 space-y-8">
@@ -521,7 +521,7 @@ export default function App() {
               <div className="md:text-right">
                 <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Date de l'événement</p>
                 <p className="text-lg font-bold text-slate-900">02 Avril 2026</p>
-                <p className="text-slate-500 text-sm">Ouverture des portes : 19h30</p>
+                <p className="text-slate-500 text-sm">Ouverture des portes : 20h15</p>
               </div>
             </div>
 
@@ -575,7 +575,7 @@ export default function App() {
             </div>
 
             <div className="text-center pt-4">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Document officiel - Gala Manager</p>
+              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Document officiel - Association Et vie danse</p>
             </div>
           </div>
         </div>
@@ -866,7 +866,7 @@ export default function App() {
         className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 border border-slate-100"
       >
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-slate-900 mb-2">Réservation Gala</h2>
+          <h2 className="text-3xl font-bold text-slate-900 mb-2">Gala "Et vie danse"</h2>
           <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium ${settings.phase === 1 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
             {settings.phase === 1 ? <Lock className="w-4 h-4 mr-2" /> : <Unlock className="w-4 h-4 mr-2" />}
             {settings.phase === 1 ? "Phase 1 : Priorité Adhérents" : "Phase 2 : Vente Libre"}
@@ -1063,7 +1063,7 @@ export default function App() {
       }
     };
 
-    const totalRevenue = (sales.adult * settings.priceAdult) + (sales.child * settings.priceChild) + (sales.pmrCount * settings.pricePmr);
+    const totalRevenue = (sales.adult * (settings.priceAdult || 0)) + (sales.child * (settings.priceChild || 0)) + (sales.pmr * (settings.pricePmr || 0));
     const completedRes = reservations.filter(r => r.status === 'completed').length;
     const pendingRes = reservations.filter(r => r.status === 'pending').length;
     const activeMembers = members.filter(m => m.ticketsBought > 0).length;
@@ -1583,7 +1583,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <div className="bg-indigo-600 p-1.5 rounded-lg"><Ticket className="text-white w-5 h-5" /></div>
-              <span className="text-xl font-black tracking-tighter text-slate-900">GALA<span className="text-indigo-600">PRO</span></span>
+              <span className="text-xl font-black tracking-tighter text-slate-900 uppercase">Et vie <span className="text-indigo-600">danse</span></span>
             </div>
             <div className="flex items-center space-x-4">
               <button onClick={() => setCurrentView('booking')} className={`text-sm font-bold ${currentView === 'booking' ? 'text-indigo-600' : 'text-slate-500'}`}>Billetterie</button>

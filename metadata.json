@@ -1,5 +1,5 @@
 {
-  "name": "GalaPro - Billetterie de Gala",
-  "description": "Application de réservation de places pour gala avec gestion des quotas adhérents, paiement HelloAsso et emails Brevo.",
+  "name": "Et vie danse - Billetterie Gala",
+  "description": "Application de réservation pour l'association Et vie danse avec gestion des quotas adhérents et preuve d'achat.",
   "requestFramePermissions": ["camera"]
 }
