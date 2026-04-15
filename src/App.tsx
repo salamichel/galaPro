@@ -10,7 +10,8 @@ import {
   addDoc, serverTimestamp, query, orderBy, setDoc, deleteDoc, getDocs 
 } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from './firebase';
+import { logEvent } from 'firebase/analytics';
+import { db, auth, analytics } from './firebase';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -73,6 +74,14 @@ export default function App() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' as 'success' | 'error' | 'info' });
   const [ticketViewId, setTicketViewId] = useState<string | null>(null);
   const [ticketViewReservation, setTicketViewReservation] = useState<Reservation | null>(null);
+
+  // --- ANALYTICS HELPER ---
+  const logAppEvent = useCallback(async (eventName: string, params?: any) => {
+    const a = await analytics;
+    if (a) {
+      logEvent(a, eventName, params);
+    }
+  }, []);
 
   // --- AUTH ---
   useEffect(() => {
@@ -139,6 +148,10 @@ export default function App() {
 
         if (status === 'Success') {
           setPaymentConfirmed(true);
+          logAppEvent('purchase', { 
+            transaction_id: id,
+            reservation_id: intent.reservationId 
+          });
           
           if (intent.reservationId) {
             setLastConfirmedResId(intent.reservationId);
@@ -720,8 +733,10 @@ export default function App() {
             const mDoc = await getDoc(doc(db, 'members', dancerCode.trim().toUpperCase()));
             if (mDoc.exists()) {
               setMemberInfo({ id: mDoc.id, ...mDoc.data() } as Member);
+              logAppEvent('dancer_code_success', { code: dancerCode.trim().toUpperCase() });
             } else {
               setMemberInfo(null);
+              logAppEvent('dancer_code_invalid', { code: dancerCode.trim().toUpperCase() });
             }
           } catch (err) {
             setMemberInfo(null);
@@ -810,6 +825,13 @@ export default function App() {
 
         // 1. Create Checkout Intent via Backend (HelloAsso)
         const totalAmount = (reqAdult * settings.priceAdult) + (reqChild * settings.priceChild) + (reqPmr * settings.pricePmr);
+        
+        logAppEvent('begin_checkout', { 
+          amount: totalAmount, 
+          tickets: totalRequested,
+          phase: settings.phase 
+        });
+
         const checkoutRes = await axios.post('/api/helloasso/checkout', {
           amount: totalAmount,
           label: `Gala - ${totalRequested} places`,
@@ -1028,6 +1050,7 @@ export default function App() {
     const handleSaveSettings = async () => {
       try {
         await updateDoc(doc(db, 'settings', 'global'), { ...editSettings });
+        logAppEvent('admin_save_settings', { phase: editSettings.phase });
         showToast("Paramètres enregistrés avec succès");
       } catch (err) {
         showToast("Erreur lors de l'enregistrement", "error");
@@ -1053,6 +1076,7 @@ export default function App() {
       if (!confirm(`Supprimer ${selectedMembers.length} adhérent(s) ?`)) return;
 
       try {
+        logAppEvent('admin_delete_members', { count: selectedMembers.length });
         for (const id of selectedMembers) {
           await deleteDoc(doc(db, 'members', id));
         }
@@ -1586,9 +1610,9 @@ export default function App() {
               <span className="text-xl font-black tracking-tighter text-slate-900 uppercase">Et vie <span className="text-indigo-600">danse</span></span>
             </div>
             <div className="flex items-center space-x-4">
-              <button onClick={() => setCurrentView('booking')} className={`text-sm font-bold ${currentView === 'booking' ? 'text-indigo-600' : 'text-slate-500'}`}>Billetterie</button>
+              <button onClick={() => { setCurrentView('booking'); logAppEvent('view_booking'); }} className={`text-sm font-bold ${currentView === 'booking' ? 'text-indigo-600' : 'text-slate-500'}`}>Billetterie</button>
               {isAdmin && (
-                <button onClick={() => setCurrentView('admin')} className={`text-sm font-bold ${currentView === 'admin' ? 'text-indigo-600' : 'text-slate-500'}`}>Admin</button>
+                <button onClick={() => { setCurrentView('admin'); logAppEvent('view_admin'); }} className={`text-sm font-bold ${currentView === 'admin' ? 'text-indigo-600' : 'text-slate-500'}`}>Admin</button>
               )}
               {!user ? (
                 <button onClick={login} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Connexion</button>
