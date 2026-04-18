@@ -1033,6 +1033,19 @@ export default function App() {
                           {res.status === 'completed' ? 'Payé' : 'En attente'}
                         </span>
                       </div>
+                      <div className="flex gap-2 mt-0.5">
+                        {res.adultCount > 0 && <span className="text-[10px] text-slate-500 font-medium">{res.adultCount} Adulte(s)</span>}
+                        {res.childCount > 0 && <span className="text-[10px] text-slate-500 font-medium">{res.childCount} Enfant(s)</span>}
+                        {res.pmrCount > 0 && <span className="text-[10px] text-slate-500 font-medium">{res.pmrCount} PMR</span>}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {res.ticketHolders?.slice(0, 3).map((h: any, i: number) => (
+                          <span key={i} className="text-[9px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded italic">
+                            {h.firstName} {h.lastName[0]}.
+                          </span>
+                        ))}
+                        {res.ticketHolders?.length > 3 && <span className="text-[9px] text-slate-400">...</span>}
+                      </div>
                       <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
                         {new Date(res.createdAt?.toDate ? res.createdAt.toDate() : res.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
