@@ -724,6 +724,7 @@ export default function App() {
     const [lastName, setLastName] = useState('');
     const [buyerEmail, setBuyerEmail] = useState('');
     const [ticketHolders, setTicketHolders] = useState<{ firstName: string; lastName: string; type: 'adult' | 'child' | 'pmr' }[]>([]);
+    const [memberReservations, setMemberReservations] = useState<Reservation[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Validate dancer code and fetch info
@@ -749,6 +750,26 @@ export default function App() {
       validateCode();
     }, [dancerCode, settings.phase]);
 
+    // Fetch existing reservations for this dancer code
+    useEffect(() => {
+      if (settings.phase === 1 && memberInfo) {
+        const resQuery = query(collection(db, 'reservations'), orderBy('createdAt', 'desc'));
+        const unsubscribe = onSnapshot(resQuery, (snap) => {
+          const results: Reservation[] = [];
+          snap.forEach(d => {
+            const data = d.data();
+            if (data.dancerCode === dancerCode.trim().toUpperCase()) {
+              results.push({ id: d.id, ...data } as Reservation);
+            }
+          });
+          setMemberReservations(results);
+        });
+        return () => unsubscribe();
+      } else {
+        setMemberReservations([]);
+      }
+    }, [memberInfo, dancerCode, settings.phase]);
+
     // Update ticket holders when counts change
     useEffect(() => {
       const newHolders: { firstName: string; lastName: string; type: 'adult' | 'child' | 'pmr' }[] = [];
@@ -770,6 +791,42 @@ export default function App() {
       const updated = [...ticketHolders];
       updated[index] = { ...updated[index], [field]: value };
       setTicketHolders(updated);
+    };
+
+    const handleContinuePayment = async (res: Reservation) => {
+      setIsProcessing(true);
+      try {
+        const totalAmount = (res.adultCount * settings.priceAdult) + (res.childCount * settings.priceChild) + (res.pmrCount * settings.pricePmr);
+        
+        logAppEvent('reconnect_checkout', { 
+          amount: totalAmount, 
+          reservation_id: res.id 
+        });
+
+        // 1. Create NEW Checkout Intent
+        const checkoutRes = await axios.post('/api/helloasso/checkout', {
+          amount: totalAmount,
+          label: `Gala - ${res.adultCount + res.childCount + res.pmrCount} places (Reprise)`,
+          buyer: { 
+            firstName: res.buyerName.split(' ')[0], 
+            lastName: res.buyerName.split(' ').slice(1).join(' ') || res.buyerName, 
+            email: res.buyerEmail 
+          },
+          metadata: { dancerCode: res.dancerCode, adult: res.adultCount, child: res.childCount, pmr: res.pmrCount }
+        });
+
+        // 2. Update existing reservation with the new HelloAsso ID
+        await updateDoc(doc(db, 'reservations', res.id), {
+          helloAssoId: checkoutRes.data.id,
+          updatedAt: serverTimestamp()
+        });
+
+        // 3. Redirect
+        window.location.href = checkoutRes.data.redirectUrl;
+      } catch (err: any) {
+        showToast("Erreur lors de la reprise du paiement", "error");
+        setIsProcessing(false);
+      }
     };
 
     // Pre-fill from URL
@@ -955,6 +1012,54 @@ export default function App() {
               ) : (
                 <p className="text-xs text-indigo-600 mt-2">Max {settings.maxPerDancerPhase1} places par danseur.</p>
               )}
+            </div>
+          )}
+
+          {/* Affichage des commandes existantes pour ce code */}
+          {memberReservations.length > 0 && (
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center">
+                <Ticket className="w-3 h-3 mr-2" /> Vos commandes précédentes
+              </h3>
+              <div className="space-y-3">
+                {memberReservations.map(res => (
+                  <div key={res.id} className="bg-white p-3 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-900">{res.adultCount + res.childCount + res.pmrCount} places</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                          res.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {res.status === 'completed' ? 'Payé' : 'En attente'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
+                        {new Date(res.createdAt?.toDate ? res.createdAt.toDate() : res.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    
+                    {res.status === 'pending' ? (
+                      <button 
+                        type="button" 
+                        disabled={isProcessing}
+                        onClick={() => handleContinuePayment(res)}
+                        className="bg-indigo-600 text-white text-[11px] font-black px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center"
+                      >
+                        {isProcessing ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <ArrowRight className="w-3 h-3 mr-1" />}
+                        PAYER
+                      </button>
+                    ) : (
+                      <button 
+                        type="button" 
+                        onClick={() => setTicketViewId(res.id)}
+                        className="bg-slate-900 text-white text-[11px] font-black px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center"
+                      >
+                        <FileText className="w-3 h-3 mr-1" /> TICKET
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
