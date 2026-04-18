@@ -138,6 +138,7 @@ export default function App() {
     const code = params.get('code');
     const orderId = params.get('orderId');
     const error = params.get('error');
+    const paymentAction = params.get('payment');
 
     const checkPaymentStatus = async (id: string) => {
       if (!id || id === 'null') return;
@@ -199,14 +200,14 @@ export default function App() {
     if (window.location.pathname === '/payment-success') {
       if (checkoutIntentId) {
         checkPaymentStatus(checkoutIntentId);
-      } else {
-        setPaymentConfirmed(true);
-        showToast("Paiement réussi ! Votre réservation est en cours de validation.", "success");
       }
       window.history.replaceState({}, '', '/');
-    } else if (window.location.pathname === '/payment-error') {
-      const errorMsg = error ? `Erreur : ${error}` : "Le paiement a échoué ou a été annulé.";
+    } else if (window.location.pathname === '/payment-error' || paymentAction === 'error') {
+      const errorMsg = error ? `Erreur : ${error}` : "Le paiement a échoué.";
       showToast(errorMsg, "error");
+      window.history.replaceState({}, '', '/');
+    } else if (paymentAction === 'cancel') {
+      showToast("Le paiement a été annulé.", "info");
       window.history.replaceState({}, '', '/');
     }
 

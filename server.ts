@@ -222,8 +222,8 @@ async function startServer() {
           totalAmount: Math.round(amount * 100), // in cents
           initialAmount: Math.round(amount * 100),
           itemName: label,
-          backUrl: `${process.env.APP_URL}/payment-success?type=back`,
-          errorUrl: `${process.env.APP_URL}/payment-error?type=error`,
+          backUrl: `${process.env.APP_URL}/?payment=cancel`,
+          errorUrl: `${process.env.APP_URL}/?payment=error`,
           returnUrl: `${process.env.APP_URL}/payment-success?type=return`,
           containsDonation: false,
           payer: {
