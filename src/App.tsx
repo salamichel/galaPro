@@ -857,12 +857,8 @@ export default function App() {
           helloAssoId: checkoutRes.data.id
         });
 
-        // 3. Redirect to HelloAsso in a new tab to avoid iframe permission issues
-        const paymentWindow = window.open(checkoutRes.data.redirectUrl, '_blank');
-        
-        if (!paymentWindow) {
-          showToast("Le bloqueur de fenêtres a empêché l'ouverture du paiement. Veuillez autoriser les popups.", "error");
-        }
+        // 3. Redirect to HelloAsso directly in the same window to avoid popup blocker issues
+        window.location.href = checkoutRes.data.redirectUrl;
 
       } catch (err: any) {
         let errorMessage = "Erreur lors de la réservation";
