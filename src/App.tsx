@@ -455,6 +455,23 @@ export default function App() {
     showToast(`${count} emails envoyés`);
   };
 
+  const sendUnusedCodesEmails = async () => {
+    const unusedMembers = members.filter(m => m.ticketsBought === 0);
+    if (unusedMembers.length === 0) {
+      showToast("Aucun code non utilisé", "info");
+      return;
+    }
+    if (!confirm(`Envoyer l'email aux ${unusedMembers.length} adhérent(s) avec code non utilisé ?`)) return;
+    let count = 0;
+    for (const m of unusedMembers) {
+      if (m.email) {
+        await sendMemberEmail(m);
+        count++;
+      }
+    }
+    showToast(`${count} emails envoyés aux codes non utilisés`);
+  };
+
   const handleDeleteMember = async (id: string) => {
     if (!confirm("Supprimer cet adhérent ?")) return;
     try {
@@ -1149,6 +1166,7 @@ export default function App() {
     const [editSettings, setEditSettings] = useState<AppSettings>(settings);
     const [resSearch, setResSearch] = useState('');
     const [editingMember, setEditingMember] = useState<Member | null>(null);
+    const [showUnusedOnly, setShowUnusedOnly] = useState(false);
 
     useEffect(() => {
       setEditSettings(settings);
@@ -1206,6 +1224,8 @@ export default function App() {
     const completedRes = reservations.filter(r => r.status === 'completed').length;
     const pendingRes = reservations.filter(r => r.status === 'pending').length;
     const activeMembers = members.filter(m => m.ticketsBought > 0).length;
+    const unusedMembers = members.filter(m => m.ticketsBought === 0);
+    const displayMembers = showUnusedOnly ? unusedMembers : members;
 
     return (
       <div className="max-w-6xl mx-auto space-y-6">
@@ -1350,21 +1370,41 @@ export default function App() {
             <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold flex items-center"><Users className="mr-2 w-5 h-5" /> Liste des Adhérents</h3>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {selectedMembers.length > 0 && (
-                    <button 
+                    <button
                       onClick={handleDeleteMembers}
                       className="text-xs bg-rose-100 text-rose-600 px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-rose-200 transition-colors"
                     >
                       <Trash2 className="w-3 h-3 mr-1.5" /> Supprimer ({selectedMembers.length})
                     </button>
                   )}
-                  <button 
-                    onClick={sendAllEmails}
-                    className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-indigo-700 transition-colors"
+                  <button
+                    onClick={() => setShowUnusedOnly(!showUnusedOnly)}
+                    className={`text-xs px-3 py-1.5 rounded-lg font-bold flex items-center transition-colors ${
+                      showUnusedOnly
+                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
-                    <Mail className="w-3 h-3 mr-1.5" /> Envoyer à tous
+                    <AlertCircle className="w-3 h-3 mr-1.5" /> Codes non utilisés ({unusedMembers.length})
                   </button>
+                  {showUnusedOnly && unusedMembers.length > 0 && (
+                    <button
+                      onClick={sendUnusedCodesEmails}
+                      className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-amber-700 transition-colors"
+                    >
+                      <Mail className="w-3 h-3 mr-1.5" /> Envoyer aux codes non utilisés
+                    </button>
+                  )}
+                  {!showUnusedOnly && (
+                    <button
+                      onClick={sendAllEmails}
+                      className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold flex items-center hover:bg-indigo-700 transition-colors"
+                    >
+                      <Mail className="w-3 h-3 mr-1.5" /> Envoyer à tous
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -1372,10 +1412,18 @@ export default function App() {
                   <thead>
                     <tr className="border-b border-slate-100">
                       <th className="pb-2 w-8">
-                        <input 
-                          type="checkbox" 
-                          checked={members.length > 0 && selectedMembers.length === members.length}
-                          onChange={toggleAllMembers}
+                        <input
+                          type="checkbox"
+                          checked={displayMembers.length > 0 && selectedMembers.length === displayMembers.length && displayMembers.every(m => selectedMembers.includes(m.id))}
+                          onChange={() => {
+                            if (selectedMembers.length === displayMembers.length && displayMembers.every(m => selectedMembers.includes(m.id))) {
+                              setSelectedMembers(selectedMembers.filter(id => !displayMembers.map(m => m.id).includes(id)));
+                            } else {
+                              const newSelected = new Set(selectedMembers);
+                              displayMembers.forEach(m => newSelected.add(m.id));
+                              setSelectedMembers(Array.from(newSelected));
+                            }
+                          }}
                           className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                         />
                       </th>
@@ -1386,7 +1434,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {members.map(m => (
+                    {displayMembers.map(m => (
                       <tr key={m.id} className={`border-b border-slate-50 transition-colors ${selectedMembers.includes(m.id) ? 'bg-indigo-50/30' : ''}`}>
                         <td className="py-2">
                           <input 
@@ -1440,6 +1488,11 @@ export default function App() {
                     ))}
                   </tbody>
                 </table>
+                {displayMembers.length === 0 && (
+                  <div className="text-center py-12 text-slate-400 italic">
+                    {showUnusedOnly ? 'Aucun code non utilisé' : 'Aucun adhérent'}
+                  </div>
+                )}
               </div>
             </div>
           </div>
